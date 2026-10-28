@@ -1,0 +1,6 @@
+# 凭据与构建产物，绝不入库
+cf_token.txt
+cf_account.txt
+invest-publish/
+__pycache__/
+*.pyc

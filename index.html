@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投资记录面板</title>
+<style>
+:root {
+  --bg: #F7F7F8;
+  --panel: #FFFFFF;
+  --panel-muted: #F0F1F3;
+  --text: #171717;
+  --muted: #6B7280;
+  --border: #E5E7EB;
+  --grid: #EDEEF1;
+  --brand: #0FDC78;
+  --brand-deep: #02743B;
+  --brand-soft: #E5FFF2;
+  --brand-text: #004D26;
+  --up: #0E9F6E;
+  --down: #E8463A;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .04);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 14px/1.6 "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.app {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+  display: grid;
+  gap: 16px;
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.topbar h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; }
+.topbar .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.btn:hover { background: var(--panel-muted); }
+.btn.primary { background: var(--brand-deep); border-color: var(--brand-deep); color: #fff; }
+.btn.primary:hover { background: #02602F; }
+.btn.ghost { background: transparent; }
+.btn.ghost:hover { background: var(--panel-muted); }
+
+/* ---------- 消息条 ---------- */
+.msg {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  background: var(--panel);
+}
+.msg.info { border-color: #BFDBFE; background: #EFF6FF; color: #1D4ED8; }
+.msg.ok { border-color: #A7F3D0; background: #ECFDF5; color: #047857; }
+.msg.err { border-color: #FECACA; background: #FEF2F2; color: #B91C1C; }
+
+/* ---------- 面板与指标 ---------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  min-width: 0;
+}
+.panel h2 { margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; }
+.panel h2 .cap { margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.cap { font-size: 12px; color: var(--muted); }
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.metrics.small { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.metric {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.metric .k { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.metric .v {
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: "Inter", "PingFang SC", system-ui, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metric .d { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric .v.up { color: var(--up); }
+.metric .v.down { color: var(--down); }
+
+.row2 {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* ---------- 图表 ---------- */
+.chartBox { position: relative; height: 280px; margin-top: 14px; }
+.donutBox { position: relative; height: 220px; margin-top: 14px; }
+.svgChart { position: absolute; inset: 0; }
+.svgChart svg { width: 100%; height: 100%; display: block; }
+.chartMsg {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 13px; text-align: center; padding: 12px;
+}
+.chartMsg[hidden] { display: none !important; }
+.legend {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 6px 14px; margin-top: 12px;
+  font-size: 12px; color: var(--muted);
+}
+.legend .item { display: inline-flex; align-items: center; gap: 6px; }
+.legend .dot { width: 10px; height: 10px; border-radius: 999px; }
+
+/* ---------- 表格 ---------- */
+.tableWrap { overflow-x: auto; margin-top: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 560px; }
+th {
+  text-align: left; padding: 8px 10px;
+  font-size: 12px; font-weight: 500; color: var(--muted);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--grid);
+  font-size: 13px; white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px; }
+td.date { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px; color: var(--muted); }
+.gain { color: var(--up); }
+.loss { color: var(--down); }
+.dim { color: var(--muted); }
+
+.tag {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 20px;
+  background: var(--panel-muted);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.tag.sell { background: var(--brand-soft); border-color: transparent; color: var(--brand-text); }
+.tag.profit { background: transparent; }
+
+.fundLink {
+  appearance: none; background: none; border: none; padding: 0;
+  font: inherit; color: var(--text); cursor: pointer;
+  border-bottom: 1px dashed transparent;
+}
+.fundLink:hover { color: var(--brand-deep); border-bottom-color: var(--brand-deep); }
+
+/* ---------- 基金卡片 ---------- */
+.fundGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.fundCard {
+  text-align: left;
+  appearance: none; border: 1px solid var(--border); background: var(--panel);
+  border-radius: 10px; padding: 14px 16px; cursor: pointer; font: inherit; color: inherit;
+  display: grid; gap: 6px;
+  transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+.fundCard:hover { border-color: var(--brand); box-shadow: 0 2px 10px rgba(2, 116, 59, .08); }
+.fundCard .name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fundCard .meta { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.fundCard .meta b { font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+.fundCard .more { font-size: 12px; color: var(--brand-deep); }
+
+/* ---------- 详情（覆盖层） ---------- */
+.detailOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: var(--bg);
+  -webkit-overflow-scrolling: touch;
+}
+.detailOverlay[hidden] { display: none !important; }
+body.locked { overflow: hidden; }
+.detailHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.detailHead h2 { margin: 0; }
+.empty {
+  padding: 28px 12px; text-align: center; color: var(--muted); font-size: 13px;
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 860px) {
+  .row2 { grid-template-columns: 1fr; }
+  .chartBox { height: 240px; }
+}
+@media (max-width: 640px) {
+  .app { padding: 14px 12px 40px; }
+  .metrics, .metrics.small { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric .v { font-size: 19px; }
+  .panel { padding: 14px; }
+  .chartBox { height: 210px; }
+  .donutBox { height: 200px; }
+  .topbar h1 { font-size: 18px; }
+}
+/* 图表悬浮提示 */
+#chartTip {
+  position: fixed; z-index: 60; pointer-events: none;
+  background: #171717; color: #fff; font-size: 12px; line-height: 1.4;
+  padding: 5px 10px; border-radius: 6px; white-space: nowrap;
+  opacity: 0; transition: opacity .12s; box-shadow: 0 2px 10px rgba(0,0,0,.2);
+}
+g.pt { cursor: pointer; }
+g.pt .dot { transition: r .12s; }
+.chartRanges { position: absolute; top: 0; right: 0; display: flex; gap: 4px; z-index: 2; }
+.rangeBtn {
+  border: 1px solid #E5E7EB; background: #fff; color: #6B7280;
+  font-size: 11px; padding: 2px 8px; border-radius: 999px; cursor: pointer;
+  font-family: inherit;
+}
+.rangeBtn:hover { border-color: #9CA3AF; }
+.rangeBtn.on { background: #171717; border-color: #171717; color: #fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div>
+      <h1>投资记录面板</h1>
+      <p class="sub">手动记录 · 数据来自 trading_records / dividend_records / payment_records / navs</p>
+    </div>
+  </header>
+
+  <div id="msg" class="msg" hidden></div>
+
+  <!-- ===== 总览 ===== -->
+  <main id="viewDashboard" style="display:grid; gap:16px;">
+    <section class="metrics" id="metrics"></section>
+
+    <section class="panel">
+      <h2>累计收益走势 <span class="cap">单位：元</span></h2>
+      <div class="chartBox"><div class="svgChart" id="mainChart"></div><div class="chartMsg" id="mainMsg" hidden></div></div>
+    </section>
+
+    <section class="panel">
+      <h2>资产配置 <span class="cap">按当前持仓</span></h2>
+      <div class="donutBox"><div class="svgChart" id="donutChart"></div><div class="chartMsg" id="donutMsg" hidden></div></div>
+      <div class="legend" id="donutLegend"></div>
+    </section>
+
+    <section class="panel">
+      <h2>持有基金 <span class="cap">点击卡片查看单只基金详情</span></h2>
+      <div class="fundGrid" id="fundGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>交易记录 <span class="cap" id="txCount"></span></h2>
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th><th>基金</th><th>类型</th><th>操作</th>
+              <th class="num">金额</th><th class="num">收益</th>
+            </tr>
+          </thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== 单只基金详情（覆盖层，不打断总览的滚动位置） ===== -->
+  <main id="viewDetail" class="detailOverlay" hidden>
+    <div class="app">
+      <div><button id="btnBack" class="btn ghost">← 返回总览</button></div>
+      <section class="panel">
+        <div class="detailHead">
+          <h2 id="dName"></h2>
+          <span class="tag" id="dType"></span>
+        </div>
+        <section class="metrics small" id="dMetrics" style="margin-top:14px;"></section>
+      </section>
+      <section class="panel">
+        <h2 id="dChartTitle">累计收益走势 <span class="cap">单位：元</span></h2>
+        <div class="chartBox" style="height:240px;">
+          <div class="svgChart" id="fundChart"></div>
+          <div class="chartMsg" id="fundMsg" hidden></div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>该基金记录 <span class="cap" id="dCount"></span></h2>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>日期</th><th>类型</th><th>操作</th>
+                <th class="num">金额</th><th class="num">收益</th><th class="num">净值 / 份额</th>
+              </tr>
+            </thead>
+            <tbody id="dBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ===== 分类详情（覆盖层） ===== -->
+  <main id="viewCategory" class="detailOverlay" hidden>
+    <div class="app">
+      <div><button id="btnBackCat" class="btn ghost">← 返回总览</button></div>
+      <section class="panel">
+        <div class="detailHead">
+          <h2 id="cName"></h2>
+          <span class="tag">分类</span>
+        </div>
+        <section class="metrics small" id="cMetrics" style="margin-top:14px;"></section>
+      </section>
+      <section class="panel">
+        <h2>该分类下的基金 <span class="cap" id="cCount"></span></h2>
+        <div class="fundGrid" id="cFundGrid"></div>
+      </section>
+    </div>
+  </main>
+
+</div>
+
+<script>
+"use strict";
+
+/* ================= 内置示例数据（无法自动读取数据文件时使用） ================= */
+const SAMPLE = { records: [
+  { "date": "2026-01-15", "name": "招商中证白酒", "type": "股票型", "action": "买入", "amount": 5000 },
+  { "date": "2026-02-28", "name": "招商中证白酒", "type": "股票型", "action": "收益", "amount": 0, "profit": 120 },
+  { "date": "2026-03-10", "name": "易方达蓝筹精选", "type": "股票型", "action": "买入", "amount": 3000 },
+  { "date": "2026-03-31", "name": "招商中证白酒", "type": "股票型", "action": "收益", "amount": 0, "profit": -60 },
+  { "date": "2026-04-30", "name": "易方达蓝筹精选", "type": "股票型", "action": "收益", "amount": 0, "profit": 210 },
+  { "date": "2026-05-31", "name": "易方达蓝筹精选", "type": "股票型", "action": "收益", "amount": 0, "profit": -80 },
+  { "date": "2026-06-30", "name": "天弘余额宝", "type": "货币型", "action": "买入", "amount": 10000 },
+  { "date": "2026-06-30", "name": "易方达蓝筹精选", "type": "股票型", "action": "收益", "amount": 0, "profit": 340 },
+  { "date": "2026-07-15", "name": "富国天惠成长", "type": "混合型", "action": "买入", "amount": 4000 },
+  { "date": "2026-07-31", "name": "富国天惠成长", "type": "混合型", "action": "收益", "amount": 0, "profit": 45 },
+  { "date": "2026-07-31", "name": "易方达蓝筹精选", "type": "股票型", "action": "收益", "amount": 0, "profit": 150 },
+  { "date": "2026-08-02", "name": "招商中证白酒", "type": "股票型", "action": "卖出", "amount": 5000, "profit": 1320 },
+  { "date": "2026-08-28", "name": "广发纯债债券A", "type": "债券型", "action": "买入", "amount": 8000 },
+  { "date": "2026-08-31", "name": "天弘余额宝", "type": "货币型", "action": "收益", "amount": 0, "profit": 28 },
+  { "date": "2026-08-31", "name": "富国天惠成长", "type": "混合型", "action": "收益", "amount": 0, "profit": -30 },
+  { "date": "2026-08-31", "name": "易方达蓝筹精选", "type": "股票型", "action": "收益", "amount": 0, "profit": 420 },
+  { "date": "2026-09-12", "name": "易方达蓝筹精选", "type": "股票型", "action": "买入", "amount": 5000 },
+  { "date": "2026-09-30", "name": "天弘余额宝", "type": "货币型", "action": "收益", "amount": 0, "profit": 30 },
+  { "date": "2026-09-30", "name": "广发纯债债券A", "type": "债券型", "action": "收益", "amount": 0, "profit": 65 },
+  { "date": "2026-09-30", "name": "富国天惠成长", "type": "混合型", "action": "收益", "amount": 0, "profit": 88 },
+  { "date": "2026-09-30", "name": "易方达蓝筹精选", "type": "股票型", "action": "收益", "amount": 0, "profit": 510 }
+]};
+
+/* ================= 状态与工具 ================= */
+let DATA = [];
+let NAVS = [];   // 每日净值：{ date, name, nav }
+let DIVIDENDS = [];  // 分红：{ date, name, amount }
+let PAYMENTS = [];   // 现金宝充值/收益：{ date, action, amount, profit }
+
+// 现金宝名称；全部基金买入均从现金宝扣款（历史买入也计入，余额可为负）
+const CASH_NAME = "现金宝";
+
+// 基金名称映射：不同数据源名称不一致时统一
+const NAME_MAP = {
+  "南方黄金股指数A": "南方黄金股票指数A"
+};
+const normName = (n) => {
+  const k = String(n || "").trim();
+  return NAME_MAP[k] || k;
+};
+
+// 日期标准化：2026-9-22 → 2026-09-22
+function normDate(s) {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s || "").trim());
+  if (!m) return String(s || "").trim();
+  return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+}
+
+const $ = (s) => document.querySelector(s);
+const fmtMoney = (n) => "¥" + Number(n || 0).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+const fmtSigned = (n) => (n > 0 ? "+" : n < 0 ? "-" : "") + fmtMoney(Math.abs(n));
+const fmtPct = (n) => (n >= 0 ? "+" : "") + (n * 100).toFixed(2) + "%";
+const fmtShares = (n) => Number(n || 0).toLocaleString("zh-CN", { maximumFractionDigits: 4 });
+const fmtNav = (n) => Number(n || 0).toFixed(4);
+const esc = (s) => String(s);
+
+function isDateStr(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")); }
+
+function showMsg(text, kind) {
+  const el = $("#msg");
+  el.textContent = text;
+  el.className = "msg " + (kind || "info");
+  el.hidden = false;
+}
+
+/* ================= 数据解析与汇总 ================= */
+function parseData(json) {
+  const arr = Array.isArray(json) ? json : (json && Array.isArray(json.records) ? json.records : null);
+  if (!arr) throw new Error('JSON 格式不正确：应为 { "records": [ ... ] } 或直接一个记录数组');
+  const out = arr.map((r, i) => {
+    const no = i + 1;
+    const date = normDate(r.date);
+    const name = normName(r.name || r.fund);
+    const type = (String(r.type || "").trim()) || "其他";
+    let action = String(r.action || "").trim();
+    const amount = r.amount == null || r.amount === "" ? 0 : Number(r.amount);
+    const profit = r.profit == null || r.profit === "" ? 0 : Number(r.profit);
+    const nav = r.nav == null || r.nav === "" ? null : Number(r.nav);
+    const shares = r.shares == null || r.shares === "" ? null : Number(r.shares);
+    const confirmDate = r.confirmDate ? normDate(r.confirmDate) : "";
+    const navDate = r.navDate ? normDate(r.navDate) : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`第 ${no} 条记录日期应为 YYYY-MM-DD，当前为「${date}」`);
+    if (!name) throw new Error(`第 ${no} 条记录缺少基金名称（name）`);
+    if (!["买入", "卖出", "收益"].includes(action)) action = amount > 0 ? "买入" : "收益";
+    if (!Number.isFinite(amount) || !Number.isFinite(profit)) throw new Error(`第 ${no} 条记录的 amount / profit 必须是数字`);
+    if (nav !== null && (!Number.isFinite(nav) || nav < 0)) throw new Error(`第 ${no} 条记录的 nav 必须是正数`);
+    if (shares !== null && (!Number.isFinite(shares) || shares < 0)) throw new Error(`第 ${no} 条记录的 shares 必须是正数`);
+    return { date, name, type, action, amount, profit, nav, shares, confirmDate, navDate };
+  });
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
+}
+
+// 解析交易流水（含确认信息）：{ date, name, code, type, action, amount, shares, nav, fee, confirmDate }
+// 去重：完全相同的 (date, name, action, amount, shares, nav) 只保留一条
+function parseTrading(json) {
+  const arr = Array.isArray(json) ? json : (json && Array.isArray(json.records) ? json.records : []);
+  const seen = new Set();
+  const out = [];
+  for (const r of arr) {
+    const date = normDate(r.date);
+    const name = normName(r.name);
+    const action = String(r.action || "").trim();
+    const amount = Number(r.amount || 0);
+    const shares = r.shares == null ? null : Number(r.shares);
+    const nav = r.nav == null ? null : Number(r.nav);
+    const fee = Number(r.fee || 0);
+    const key = `${date}|${name}|${action}|${amount}|${shares}|${nav}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      date, name,
+      type: String(r.type || "").trim() || "其他",
+      action: action || (amount > 0 ? "买入" : "收益"),
+      amount, shares, nav, fee,
+      confirmDate: r.confirmDate ? normDate(r.confirmDate) : "",
+      profit: 0
+    });
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
+}
+
+// 解析分红：{ date, name, action:"分红", amount }
+function parseDividend(json) {
+  const arr = Array.isArray(json) ? json : (json && Array.isArray(json.records) ? json.records : []);
+  return arr.map((r) => ({
+    date: normDate(r.date),
+    name: normName(r.name),
+    amount: Number(r.amount || 0)
+  })).filter((r) => r.date && r.name && r.amount !== 0);
+}
+
+// 解析充值/收益：{ date, action:"充值"|"收益", amount }
+function parsePayment(json) {
+  const arr = Array.isArray(json) ? json : (json && Array.isArray(json.records) ? json.records : []);
+  return arr.map((r) => {
+    const action = String(r.action || "充值").trim();
+    const amount = Number(r.amount || 0);
+    return {
+      date: normDate(r.date),
+      name: CASH_NAME,
+      type: "现金",
+      action,
+      amount,
+      profit: action === "收益" ? amount : 0,
+      nav: null,
+      shares: null
+    };
+  }).filter((r) => r.date && r.amount !== 0);
+}
+
+// 读取一个月的净值矩阵：{ "2026-10-21": { "基金名": 1.2345 } }
+function parseNavMonth(json) {
+  const out = [];
+  for (const [date, funds] of Object.entries(json || {})) {
+    if (!isDateStr(date) || !funds || typeof funds !== "object") continue;
+    for (const [name, nav] of Object.entries(funds)) {
+      const v = Number(nav);
+      if (!name || !Number.isFinite(v) || v <= 0) continue;
+      out.push({ date, name, nav: v });
+    }
+  }
+  return out;
+}
+
+// 按「基金 + 日期」去重，后出现的覆盖先出现的
+function mergeNavs(list) {
+  const map = new Map();
+  for (const n of list) map.set(n.name + "|" + n.date, n);
+  return [...map.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+function buildTimeline(records, navs, dividends, cashRecords) {
+  const allDates = new Set();
+  records.forEach((r) => allDates.add(r.date));
+  navs.forEach((n) => allDates.add(n.date));
+  (dividends || []).forEach((d) => allDates.add(d.date));
+  (cashRecords || []).forEach((c) => allDates.add(c.date));
+  const dates = [...allDates].sort();
+  if (!dates.length) return [];
+
+  const navByDate = new Map();
+  for (const n of navs) {
+    if (!navByDate.has(n.date)) navByDate.set(n.date, []);
+    navByDate.get(n.date).push(n);
+  }
+  const divByDate = new Map();
+  for (const d of (dividends || [])) {
+    divByDate.set(d.date, (divByDate.get(d.date) || 0) + d.amount);
+  }
+  const cashProfitByDate = new Map();
+  for (const c of (cashRecords || [])) {
+    if (c.action === "收益" && c.profit) {
+      cashProfitByDate.set(c.date, (cashProfitByDate.get(c.date) || 0) + c.profit);
+    }
+  }
+
+  const state = new Map();
+  const latestNav = new Map();
+  const out = [];
+  let cumDiv = 0, cumCashProfit = 0;
+  let i = 0;
+  for (const date of dates) {
+    while (i < records.length && records[i].date === date) {
+      const r = records[i++];
+      let s = state.get(r.name);
+      if (!s) {
+        s = { invested: 0, sold: 0, profitRec: 0, shares: 0, hasShares: false, pending: 0 };
+        state.set(r.name, s);
+      }
+      if (r.action === "买入") s.invested += r.amount;
+      else if (r.action === "卖出") s.sold += r.amount;
+      if (r.profit !== 0) s.profitRec += r.profit;
+      if (r.action === "买入" && r.shares === null) s.pending += r.amount;
+      if (r.shares !== null && r.action !== "收益") {
+        s.hasShares = true;
+        s.shares += r.action === "卖出" ? -r.shares : r.shares;
+      }
+    }
+    for (const n of (navByDate.get(date) || [])) latestNav.set(n.name, n.nav);
+    cumDiv += divByDate.get(date) || 0;
+    cumCashProfit += cashProfitByDate.get(date) || 0;
+
+    // 累计收益 = 各基金(市值 - 净投入) + 累计分红 + 累计现金宝收益
+    let totalValue = 0, netInvested = 0;
+    state.forEach((s, name) => {
+      const nav = latestNav.get(name);
+      if (nav && s.hasShares) totalValue += Math.max(0, s.shares) * nav + s.pending;
+      else totalValue += s.invested - s.sold + s.profitRec;
+      netInvested += s.invested - s.sold;
+    });
+    out.push({ date, v: totalValue - netInvested + cumDiv + cumCashProfit });
+  }
+  return out;
+}
+
+function aggregate(tradingRecords, navs, dividends, payments) {
+  const navList = navs || [];
+  const divList = dividends || [];
+  const payList = payments || [];
+
+  const navByFund = new Map();
+  for (const n of navList) {
+    if (!navByFund.has(n.name)) navByFund.set(n.name, []);
+    navByFund.get(n.name).push(n);
+  }
+  navByFund.forEach((arr) => arr.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)));
+
+  // 分红按基金归集
+  const divByFund = new Map();
+  for (const d of divList) {
+    divByFund.set(d.name, (divByFund.get(d.name) || 0) + d.amount);
+  }
+
+  // 构建各基金（不含现金宝）
+  const funds = new Map();
+  for (const r of tradingRecords) {
+    const f = funds.get(r.name) || {
+      name: r.name, type: r.type, invested: 0, sold: 0, profitRec: 0,
+      shares: 0, hasShares: false, pending: 0, count: 0, rows: [], dividends: 0, isCash: false
+    };
+    funds.set(r.name, f);
+    f.type = r.type;
+    f.count++;
+    f.rows.push(r);
+    if (r.action === "买入") f.invested += r.amount;
+    else if (r.action === "卖出") f.sold += r.amount;
+    if (r.profit !== 0) f.profitRec += r.profit;
+    if (r.action === "买入" && r.shares === null) f.pending += r.amount; // 未确认买入按成本计入市值
+    if (r.shares !== null && r.action !== "收益") {
+      f.hasShares = true;
+      f.shares += r.action === "卖出" ? -r.shares : r.shares;
+    }
+  }
+  // 加入分红
+  divByFund.forEach((amt, name) => {
+    const f = funds.get(name);
+    if (f) f.dividends += amt;
+  });
+
+  // 现金宝余额 = 充值 + 分红 + 基金卖出回款 − 全部基金买入 + 现金宝收益（余额可为负）
+  const cashInvested = payList.filter((p) => p.action === "充值").reduce((s, p) => s + p.amount, 0);
+  const cashProfit = payList.filter((p) => p.action === "收益").reduce((s, p) => s + p.amount, 0);
+  const dividendTotal = divList.reduce((s, d) => s + d.amount, 0);
+  const fundSellTotal = tradingRecords.filter((r) => r.action === "卖出").reduce((s, r) => s + r.amount, 0);
+  const fundBuyDeduct = tradingRecords
+    .filter((r) => r.action === "买入")
+    .reduce((s, r) => s + r.amount, 0);
+  const cashBalance = cashInvested + dividendTotal + fundSellTotal - fundBuyDeduct + cashProfit;
+
+  const cashFund = {
+    name: CASH_NAME,
+    type: "现金",
+    invested: 0,
+    sold: 0,
+    profitRec: cashProfit,
+    shares: 0,
+    hasShares: false,
+    count: payList.length,
+    rows: [...payList].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+    dividends: 0,
+    isCash: true,
+    navMode: false,
+    navSeries: [],
+    holding: cashBalance,
+    profit: cashProfit,
+    cashInvested,
+    dividendTotal,
+    fundSellTotal,
+    fundBuyDeduct
+  };
+  // 现金宝今日收益：最近一条收益记录
+  const lastCashProfit = payList.filter((p) => p.action === "收益").sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  cashFund.dailyProfit = lastCashProfit ? lastCashProfit.amount : null;
+  cashFund.dailyDate = lastCashProfit ? lastCashProfit.date : "";
+
+  let invested = 0, sold = 0, profit = 0;
+  const fundList = [];
+  const byType = new Map();
+  funds.forEach((f) => {
+    const series = navByFund.get(f.name) || [];
+    const last = series.length ? series[series.length - 1] : null;
+    const prev = series.length > 1 ? series[series.length - 2] : null;
+    f.navSeries = series;
+    f.latestNav = last ? last.nav : null;
+    f.latestNavDate = last ? last.date : "";
+    f.navMode = !!(last && f.hasShares);
+    // 今日收益 = 持有份额 × (最新净值 − 前一净值日净值)
+    f.dailyProfit = (f.navMode && prev) ? Math.max(0, f.shares) * (last.nav - prev.nav) : null;
+    f.dailyDate = prev ? last.date : "";
+    if (f.navMode) {
+      f.holding = Math.max(0, f.shares) * f.latestNav + f.pending;
+      f.profit = f.holding + f.sold - f.invested + f.dividends;
+    } else {
+      f.holding = f.invested - f.sold + f.profitRec + f.dividends;
+      f.profit = f.profitRec + f.dividends;
+    }
+    invested += f.invested;
+    sold += f.sold;
+    profit += f.profit;
+    fundList.push(f);
+    byType.set(f.type, (byType.get(f.type) || 0) + Math.max(0, f.holding));
+  });
+
+  // 现金宝加入资产列表与配置
+  fundList.push(cashFund);
+  byType.set("现金", (byType.get("现金") || 0) + Math.max(0, cashFund.holding));
+  profit += cashFund.profit;
+
+  fundList.sort((a, b) => (b.holding - a.holding) || (b.profit - a.profit));
+  const holdings = fundList.filter((f) => f.holding > 0).length;
+  // 今日收益合计：各基金按各自最新净值日 + 现金宝最近一条收益
+  const dailyParts = fundList.filter((f) => f.dailyProfit !== null);
+  const dailyDates = [...new Set(dailyParts.map((f) => f.dailyDate))].sort();
+  const dailyTotal = dailyParts.reduce((s, f) => s + f.dailyProfit, 0)
+    + (cashFund.dailyProfit !== null ? cashFund.dailyProfit : 0);
+  const dailyDate = dailyDates.length ? dailyDates[dailyDates.length - 1] : (cashFund.dailyDate || "");
+  return {
+    invested, sold, profit,
+    totalAssets: fundList.reduce((s, f) => s + f.holding, 0),
+    rate: invested > 0 ? profit / invested : 0,
+    holdings,
+    dailyTotal: dailyParts.length || cashFund.dailyProfit !== null ? dailyTotal : null,
+    dailyDate,
+    timeline: buildTimeline(tradingRecords, navList, divList,
+      payList.filter((p) => p.action === "收益")),
+    navCount: navList.length,
+    fundList, byType,
+    cashFund
+  };
+}
+
+/* ================= 图表（纯 SVG，无外部依赖） ================= */
+const DONUT_COLORS = ["#02743B", "#85FABF", "#0FDC78", "#80C1FF", "#D3D4DA", "#27D2BF", "#F87454", "#EFAA17"];
+
+function fmtAxis(v) {
+  const abs = Math.abs(v);
+  if (abs >= 10000) return (v / 10000).toFixed(abs % 10000 !== 0 ? 1 : 0) + "万";
+  return String(Math.round(v * 100) / 100);
+}
+
+/* 时间筛选：近1月/3月/6月/1年/全部（天数窗口） */
+const CHART_RANGES = [["1M", 31], ["3M", 93], ["6M", 186], ["1Y", 372], ["全部", null]];
+const chartRangeSel = {};   // mountId → 当前选中区间
+const chartLastArgs = {};   // mountId → 上次渲染参数（切换区间时重绘用）
+
+function renderLineChart(mountId, msgId, dates, values, colorHex, opts) {
+  opts = opts || {};
+  const tipWord = opts.tipWord || "累计";
+  const fmtV = opts.fmtV || fmtSigned;
+  const axisFmt = opts.axisFmt || fmtAxis;
+  const mount = $("#" + mountId);
+  const msg = $("#" + msgId);
+  if (!dates.length) {
+    mount.innerHTML = "";
+    msg.textContent = opts.emptyText || "暂无数据";
+    msg.hidden = false;
+    return;
+  }
+  msg.hidden = true;
+  chartLastArgs[mountId] = [mountId, msgId, dates, values, colorHex, opts];
+
+  // 按选中区间过滤
+  let idx = dates.map((_, i) => i);
+  const sel = chartRangeSel[mountId] || "全部";
+  const range = CHART_RANGES.find((r) => r[0] === sel);
+  if (range && range[1] !== null && dates.length > 2) {
+    const cutoff = new Date(dates[dates.length - 1] + "T00:00:00");
+    cutoff.setDate(cutoff.getDate() - range[1]);
+    const cs = cutoff.toISOString().slice(0, 10);
+    idx = idx.filter((i) => dates[i] >= cs);
+    if (idx.length < 2) idx = dates.map((_, i) => i).slice(-2);
+  }
+  const fDates = idx.map((i) => dates[i]);
+  const vals = idx.map((i) => (Number.isFinite(values[i]) ? values[i] : 0));
+
+  // 标签格式：同年 MM/DD，跨年 YY/MM
+  const crossYear = fDates[0].slice(0, 4) !== fDates[fDates.length - 1].slice(0, 4);
+  const labels = fDates.map((d) => {
+    const [y, m, dd] = d.split("-");
+    return crossYear ? `${y.slice(2)}/${m}` : `${m}/${dd}`;
+  });
+
+  const W = 640, H = 260, padL = 48, padR = 18, padT = 18, padB = 30;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  let min = Math.min(0, ...vals), max = Math.max(...vals);
+  if (opts.zeroBase === false) {
+    min = Math.min(...vals);
+    max = Math.max(...vals);
+    if (max === min) { min -= 0.5; max += 0.5; }
+  }
+  if (max === min) max = min + 1;
+  const X = (i) => padL + (vals.length === 1 ? iw / 2 : (i * iw) / (vals.length - 1));
+  const Y = (v) => padT + ih - ((v - min) / (max - min)) * ih;
+  const base = Y(opts.zeroBase === false ? min : Math.max(min, 0));
+
+  let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img">`;
+  for (let g = 0; g <= 4; g++) {
+    const v = min + ((max - min) * g) / 4;
+    const y = Y(v).toFixed(1);
+    const grid = Math.abs(v) < 1e-9 ? "#D6D9DE" : "#EDEEF1";
+    s += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="${grid}" stroke-width="1"/>`;
+    s += `<text x="${padL - 8}" y="${Number(y) + 4}" text-anchor="end" font-size="11" fill="#9CA3AF">${axisFmt(v)}</text>`;
+  }
+  const pts = vals.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
+  const line = "M" + pts.join(" L");
+  s += `<path d="${line} L${X(vals.length - 1).toFixed(1)},${base.toFixed(1)} L${X(0).toFixed(1)},${base.toFixed(1)} Z" fill="${colorHex}" opacity="0.10"/>`;
+  s += `<path d="${line}" fill="none" stroke="${colorHex}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  // 点数多时不画圆点，悬浮用单个游标点指示
+  const showDots = vals.length <= 60;
+  const step = Math.ceil(labels.length / 10);
+  vals.forEach((v, i) => {
+    if (showDots) {
+      s += `<g class="pt">` +
+        `<circle class="dot" cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3" fill="${colorHex}" stroke="#fff" stroke-width="1.5" pointer-events="none"/>` +
+        `</g>`;
+    }
+    if (i % step === 0 || i === vals.length - 1) {
+      s += `<text x="${X(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="#9CA3AF">${labels[i]}</text>`;
+    }
+  });
+  if (!showDots) {
+    s += `<circle class="cursorDot" cx="0" cy="0" r="4.5" fill="${colorHex}" stroke="#fff" stroke-width="1.5" opacity="0" pointer-events="none"/>`;
+  }
+  s += `</svg>`;
+  mount.innerHTML = s;
+
+  // 时间筛选按钮
+  const bar = document.createElement("div");
+  bar.className = "chartRanges";
+  CHART_RANGES.forEach(([label]) => {
+    const b = document.createElement("button");
+    b.className = "rangeBtn" + (label === sel ? " on" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      chartRangeSel[mountId] = label;
+      renderLineChart(...chartLastArgs[mountId]);
+    });
+    bar.appendChild(b);
+  });
+  mount.appendChild(bar);
+
+  // 在图表任意位置悬停，吸附到最近数据点显示数值
+  const tip = ensureChartTip();
+  const svg = mount.querySelector("svg");
+  const dots = [...mount.querySelectorAll("g.pt .dot")];
+  const cursor = mount.querySelector(".cursorDot");
+  const tips = vals.map((v, i) => `${labels[i]}  ${tipWord} ${fmtV(v)}`);
+  let active = -1;
+  const setActive = (i) => {
+    if (showDots) {
+      if (active >= 0 && dots[active]) dots[active].setAttribute("r", "3");
+      if (i >= 0 && dots[i]) dots[i].setAttribute("r", "5.5");
+    } else if (cursor) {
+      if (i >= 0) {
+        cursor.setAttribute("cx", X(i).toFixed(1));
+        cursor.setAttribute("cy", Y(vals[i]).toFixed(1));
+        cursor.setAttribute("opacity", "1");
+      } else {
+        cursor.setAttribute("opacity", "0");
+      }
+    }
+    active = i;
+    if (i >= 0) tip.textContent = tips[i];
+  };
+  const place = (e) => {
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + 12, y = e.clientY - h - 10;
+    if (x + w > window.innerWidth - 8) x = e.clientX - w - 12;
+    if (y < 8) y = e.clientY + 14;
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  };
+  mount.addEventListener("mousemove", (e) => {
+    const rect = svg.getBoundingClientRect();
+    if (e.clientY < rect.top || e.clientY > rect.bottom) return;
+    // viewBox 以 meet 模式缩放居中，需扣除左右留白后再换算
+    const scale = Math.min(rect.width / W, rect.height / H);
+    const offX = (rect.width - W * scale) / 2;
+    const px = (e.clientX - rect.left - offX) / scale;
+    const i = vals.length === 1 ? 0 : Math.max(0, Math.min(vals.length - 1, Math.round((px - padL) / (iw / (vals.length - 1)))));
+    if (i !== active) setActive(i);
+    tip.style.opacity = "1";
+    place(e);
+  });
+  mount.addEventListener("mouseleave", () => {
+    setActive(-1);
+    tip.style.opacity = "0";
+  });
+}
+
+let chartTipEl = null;
+function ensureChartTip() {
+  if (!chartTipEl) {
+    chartTipEl = document.createElement("div");
+    chartTipEl.id = "chartTip";
+    document.body.appendChild(chartTipEl);
+  }
+  return chartTipEl;
+}
+
+function renderDonut(entries) {
+  const msg = $("#donutMsg");
+  const legend = $("#donutLegend");
+  const mount = $("#donutChart");
+  legend.innerHTML = "";
+  const total = entries.reduce((s, e) => s + e.value, 0);
+  if (!total) {
+    mount.innerHTML = "";
+    msg.textContent = "暂无持仓数据";
+    msg.hidden = false;
+    return;
+  }
+  msg.hidden = true;
+
+  const C = 110, R = 80, SW = 26;
+  let s = `<svg viewBox="0 0 220 220" role="img">`;
+  s += `<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="#EEF0F2" stroke-width="${SW}"/>`;
+  let acc = 0;
+  entries.forEach((e, i) => {
+    const pct = (e.value / total) * 100;
+    const tip = `${e.label}  ${fmtMoney(e.value)}（${pct.toFixed(1)}%）`;
+    s += `<circle class="slice" data-type="${esc(e.label)}" cx="${C}" cy="${C}" r="${R}" fill="none" stroke="${DONUT_COLORS[i % DONUT_COLORS.length]}" stroke-width="${SW}" pathLength="100" stroke-dasharray="${pct.toFixed(2)} ${(100 - pct).toFixed(2)}" stroke-dashoffset="${(-acc).toFixed(2)}" transform="rotate(-90 ${C} ${C})" style="cursor:pointer"><title>${tip}（点击查看）</title></circle>`;
+    acc += pct;
+  });
+  s += `<text x="${C}" y="${C - 4}" text-anchor="middle" font-size="16" font-weight="600" fill="#171717" font-family="Inter,'PingFang SC',system-ui,sans-serif">${fmtAxis(total)}</text>`;
+  s += `<text x="${C}" y="${C + 16}" text-anchor="middle" font-size="11" fill="#6B7280">持仓合计</text>`;
+  s += `</svg>`;
+  mount.innerHTML = s;
+  mount.querySelectorAll(".slice").forEach((el) => {
+    el.addEventListener("click", () => openCategory(el.dataset.type));
+  });
+
+  entries.forEach((e, i) => {
+    const pct = ((e.value / total) * 100).toFixed(0);
+    const item = document.createElement("span");
+    item.className = "item";
+    item.style.cursor = "pointer";
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = DONUT_COLORS[i % DONUT_COLORS.length];
+    item.appendChild(dot);
+    item.appendChild(document.createTextNode(`${e.label} ${fmtMoney(e.value)} · ${pct}%`));
+    item.addEventListener("click", () => openCategory(e.label));
+    legend.appendChild(item);
+  });
+}
+
+/* ================= 渲染 ================= */
+function metricCell(k, v, d, cls) {
+  return `<div class="metric"><span class="k">${esc(k)}</span><span class="v ${cls || ""}">${esc(v)}</span><span class="d">${esc(d)}</span></div>`;
+}
+
+function actionTag(action) {
+  return action === "卖出" ? '<span class="tag sell">卖出</span>'
+    : action === "收益" ? '<span class="tag">收益</span>'
+    : '<span class="tag">买入</span>';
+}
+
+function renderDashboard() {
+  const a = aggregate(DATA, NAVS, DIVIDENDS, PAYMENTS);
+  const hasNav = a.fundList.some((f) => f.navMode);
+
+  $("#metrics").innerHTML =
+    metricCell("总资产", fmtMoney(a.totalAssets), "持仓 + 现金宝 + 累计收益") +
+    metricCell("今日收益", a.dailyTotal !== null ? fmtSigned(a.dailyTotal) : "—", a.dailyDate ? `${a.dailyDate.slice(5).replace("-", "/")} 净值更新` : "暂无净值数据", a.dailyTotal !== null && a.dailyTotal < 0 ? "down" : "up") +
+    metricCell("累计收益", fmtSigned(a.profit), hasNav ? "含浮动盈亏" : "已实现收益", a.profit >= 0 ? "up" : "down") +
+    metricCell("收益率", a.invested ? fmtPct(a.rate) : "—", "累计收益 / 累计投入", a.profit >= 0 ? "up" : "down") +
+    metricCell("持有基金", a.holdings + " 只", `共 ${a.fundList.length} 项 / ${DATA.length} 条交易`);
+
+  renderLineChart(
+    "mainChart", "mainMsg",
+    a.timeline.map((p) => p.date),
+    a.timeline.map((p) => p.v),
+    "#02743B"
+  );
+
+  const entries = [...a.byType.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .filter((e) => e.value > 0)
+    .sort((x, y) => y.value - x.value);
+  renderDonut(entries);
+
+  const body = $("#txBody");
+  body.innerHTML = "";
+  [...DATA].reverse().forEach((r) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td class="date">${esc(r.date)}</td>` +
+      `<td><button class="fundLink" data-fund="${esc(r.name)}">${esc(r.name)}</button></td>` +
+      `<td>${esc(r.type)}</td>` +
+      `<td>${actionTag(r.action)}</td>` +
+      `<td class="num">${r.amount ? fmtMoney(r.amount) : "—"}</td>` +
+      `<td class="num ${r.profit > 0 ? "gain" : r.profit < 0 ? "loss" : "dim"}">${r.profit ? fmtSigned(r.profit) : "—"}</td>`;
+    body.appendChild(tr);
+  });
+  $("#txCount").textContent = `共 ${DATA.length} 条`;
+
+  const grid = $("#fundGrid");
+  grid.innerHTML = "";
+  a.fundList.forEach((f) => grid.appendChild(fundCardEl(f)));
+}
+
+function fundCardEl(f) {
+  const btn = document.createElement("button");
+  btn.className = "fundCard";
+  btn.dataset.fund = f.name;
+  btn.innerHTML =
+    `<span class="name">${esc(f.name)}<span class="tag">${esc(f.type)}</span></span>` +
+    `<span class="meta"><span>持有 <b>${fmtMoney(f.holding)}</b></span>` +
+    `<span>累计收益 <b class="${f.profit >= 0 ? "gain" : "loss"}">${fmtSigned(f.profit)}</b></span></span>` +
+    `<span class="more">查看详情 →</span>`;
+  return btn;
+}
+
+function renderDetail(name) {
+  const a = aggregate(DATA, NAVS, DIVIDENDS, PAYMENTS);
+  const f = a.fundList.find((x) => x.name === name);
+  if (!f) return;
+
+  const overlay = $("#viewDetail");
+  $("#viewCategory").hidden = true; // 替换式导航：从分类页进入时先收起分类页
+  overlay.hidden = false;
+  overlay.scrollTop = 0;
+  document.body.classList.add("locked");
+  $("#dName").textContent = f.name;
+  $("#dType").textContent = f.type;
+  $("#dMetrics").innerHTML =
+    metricCell("持有金额", fmtMoney(f.holding), f.navMode ? `份额 ${fmtShares(f.shares)} × 净值 ${fmtNav(f.latestNav)}${f.pending ? ` + 待确认 ${fmtMoney(f.pending)}` : ""}` : "买入 − 卖出 + 累计收益") +
+    metricCell("今日收益", f.dailyProfit !== null && f.dailyProfit !== undefined ? fmtSigned(f.dailyProfit) : "—", f.dailyDate ? `${f.dailyDate.slice(5).replace("-", "/")} ${f.isCash ? "收益记录" : "净值更新"}` : (f.navMode ? "净值不足两日" : "—"), f.dailyProfit !== null && f.dailyProfit !== undefined && f.dailyProfit < 0 ? "down" : "up") +
+    metricCell("累计收益", fmtSigned(f.profit), f.navMode ? "市值 + 卖出 − 投入（含分红）" : "已实现收益", f.profit >= 0 ? "up" : "down") +
+    metricCell("收益率", f.isCash ? (f.cashInvested ? fmtPct(f.profit / f.cashInvested) : "—") : (f.invested ? fmtPct(f.profit / f.invested) : "—"), f.isCash ? "收益 / 累计充值" : "收益 / 投入", f.profit >= 0 ? "up" : "down") +
+    (f.navMode
+      ? metricCell("最新净值", fmtNav(f.latestNav), `${f.latestNavDate} 净值日`)
+      : metricCell("记录数", String(f.count), `买入 ${f.rows.filter((r) => r.action === "买入").length} · 卖出 ${f.rows.filter((r) => r.action === "卖出").length}`));
+
+  if (f.navSeries.length) {
+    $("#dChartTitle").innerHTML = '单位净值走势 <span class="cap">按录入的每日净值</span>';
+    renderLineChart(
+      "fundChart", "fundMsg",
+      f.navSeries.map((p) => p.date),
+      f.navSeries.map((p) => p.nav),
+      "#0E9F6E",
+      {
+        tipWord: "净值",
+        fmtV: fmtNav,
+        axisFmt: (v) => Number(v).toFixed(2),
+        zeroBase: false,
+        emptyText: "本基金暂无净值记录"
+      }
+    );
+  } else {
+    let c = 0;
+    const curve = [];
+    for (const r of f.rows) if (r.profit !== 0) { c += r.profit; curve.push({ date: r.date, v: c }); }
+    if (curve.length) {
+      $("#dChartTitle").innerHTML = '累计收益走势 <span class="cap">单位：元</span>';
+      renderLineChart(
+        "fundChart", "fundMsg",
+        curve.map((p) => p.date),
+        curve.map((p) => p.v),
+        "#0F9D63"
+      );
+    } else {
+      let cc = 0;
+      const pts = f.rows
+        .filter((r) => r.action === "买入" || r.action === "卖出")
+        .map((r) => { cc += r.action === "买入" ? r.amount : -r.amount; return { date: r.date, v: cc }; });
+      $("#dChartTitle").innerHTML = '持有金额变化 <span class="cap">暂无净值与收益记录，展示投入/赎回走势</span>';
+      renderLineChart(
+        "fundChart", "fundMsg",
+        pts.map((p) => p.date),
+        pts.map((p) => p.v),
+        "#5B9BD5"
+      );
+    }
+  }
+
+  const body = $("#dBody");
+  body.innerHTML = "";
+  [...f.rows].reverse().forEach((r) => {
+    const tr = document.createElement("tr");
+    const navCell = r.nav !== null || r.shares !== null
+      ? `${r.nav !== null ? fmtNav(r.nav) : "—"} / ${r.shares !== null ? fmtShares(r.shares) : "—"}`
+      : "—";
+    tr.innerHTML =
+      `<td class="date">${esc(r.date)}</td>` +
+      `<td>${esc(r.type)}</td>` +
+      `<td>${actionTag(r.action)}</td>` +
+      `<td class="num">${r.amount ? fmtMoney(r.amount) : "—"}</td>` +
+      `<td class="num ${r.profit > 0 ? "gain" : r.profit < 0 ? "loss" : "dim"}">${r.profit ? fmtSigned(r.profit) : "—"}</td>` +
+      `<td class="num dim">${navCell}</td>`;
+    body.appendChild(tr);
+  });
+  $("#dCount").textContent = `共 ${f.count} 条`;
+}
+
+function renderAll() {
+  renderDashboard();
+  $("#viewDetail").hidden = true;
+  document.body.classList.remove("locked");
+}
+
+/* ================= 事件绑定 ================= */
+function openCategory(type) {
+  const a = aggregate(DATA, NAVS, DIVIDENDS, PAYMENTS);
+  const funds = a.fundList.filter((f) => f.type === type);
+  if (!funds.length) return;
+
+  const overlay = $("#viewCategory");
+  overlay.hidden = false;
+  overlay.scrollTop = 0;
+  document.body.classList.add("locked");
+  $("#cName").textContent = type;
+
+  const holding = funds.reduce((s, f) => s + f.holding, 0);
+  const profit = funds.reduce((s, f) => s + f.profit, 0);
+  const dParts = funds.filter((f) => f.dailyProfit !== null && f.dailyProfit !== undefined);
+  const daily = dParts.reduce((s, f) => s + f.dailyProfit, 0);
+  const dDate = dParts.length ? dParts.map((f) => f.dailyDate).sort().pop() : "";
+  $("#cMetrics").innerHTML =
+    metricCell("分类市值", fmtMoney(holding), `占总资产 ${a.totalAssets ? fmtPct(holding / a.totalAssets) : "—"}`) +
+    metricCell("今日收益", dParts.length ? fmtSigned(daily) : "—", dDate ? `${dDate.slice(5).replace("-", "/")} 净值更新` : "暂无净值数据", dParts.length && daily < 0 ? "down" : "up") +
+    metricCell("累计收益", fmtSigned(profit), "该分类合计", profit >= 0 ? "up" : "down") +
+    metricCell("基金数量", funds.length + " 只", "点击卡片查看单只详情");
+  $("#cCount").textContent = `共 ${funds.length} 只`;
+
+  const grid = $("#cFundGrid");
+  grid.innerHTML = "";
+  funds.forEach((f) => grid.appendChild(fundCardEl(f)));
+}
+
+document.addEventListener("click", (e) => {
+  const link = e.target.closest("[data-fund]");
+  if (link) renderDetail(link.dataset.fund);
+});
+$("#btnBack").addEventListener("click", () => {
+  $("#viewDetail").hidden = true;
+  document.body.classList.remove("locked");
+});
+$("#btnBackCat").addEventListener("click", () => {
+  $("#viewCategory").hidden = true;
+  document.body.classList.remove("locked");
+});
+
+/* ================= 启动 ================= */
+// 数据源：
+//   trading_records/  → 交易流水（含份额/净值/确认日），按月文件 YYYY/YYYY_MM.json
+//   dividend_records/ → 分红记录（计入对应基金收益，资金进现金宝）
+//   payment_records/  → 现金宝充值/收益记录
+//   navs/             → 每日净值矩阵（仅用于基金市值估值）
+
+async function loadMonthlyFolder(folder) {
+  const out = [];
+  try {
+    const idxRes = await fetch(folder + "/index.json", { cache: "no-store" });
+    if (!idxRes.ok) return out;
+    const idx = await idxRes.json();
+    const files = Array.isArray(idx.files) ? idx.files : [];
+    for (const f of files) {
+      try {
+        const r = await fetch(folder + "/" + f, { cache: "no-store" });
+        if (!r.ok) continue;
+        out.push(await r.json());
+      } catch (e) { /* skip */ }
+    }
+  } catch (e) { /* folder missing is OK */ }
+  return out;
+}
+
+async function loadNavs() {
+  const out = [];
+  try {
+    const idxRes = await fetch("navs/index.json", { cache: "no-store" });
+    if (!idxRes.ok) return out;
+    const idx = await idxRes.json();
+    const files = Array.isArray(idx.files) ? idx.files : [];
+    for (const f of files) {
+      const r = await fetch("navs/" + f, { cache: "no-store" });
+      if (!r.ok) continue;
+      out.push(...parseNavMonth(await r.json()));
+    }
+  } catch (e) { /* skip */ }
+  return out;
+}
+
+(async () => {
+  try {
+    // 1) 交易流水
+    const tradingJsons = await loadMonthlyFolder("trading_records");
+    const trading = tradingJsons.flatMap(parseTrading);
+
+    // 2) 分红
+    const dividendJsons = await loadMonthlyFolder("dividend_records");
+    DIVIDENDS = dividendJsons.flatMap(parseDividend);
+
+    // 3) 现金宝（充值/收益）
+    const paymentJsons = await loadMonthlyFolder("payment_records");
+    PAYMENTS = paymentJsons.flatMap(parsePayment);
+
+    // 4) 净值
+    NAVS = mergeNavs(await loadNavs());
+
+    DATA = trading;
+    if (trading.length === 0) throw new Error("未读取到交易流水");
+
+    renderAll();
+    const msg = `已加载 ${trading.length} 条交易 · ${DIVIDENDS.length} 条分红 · ${PAYMENTS.length} 条现金宝记录 · ${NAVS.length} 条净值`;
+    showMsg(msg, "ok");
+  } catch (e) {
+    DATA = parseData(SAMPLE);
+    renderAll();
+    showMsg("未能自动读取数据（直接双击打开 HTML 时浏览器会限制本地读取），当前显示内置示例数据。" +
+      "请通过 start.bat 启动本地服务后再打开页面。错误：" + e.message, "err");
+  }
+})();
+</script>
+</body>
+</html>
