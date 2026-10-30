@@ -346,7 +346,7 @@ g.pt .dot { transition: r .12s; }
         </div>
       </section>
       <section class="panel" id="dDailyPanel">
-        <h2>每日收益 <span class="cap" id="dDailyCount"></span></h2>
+        <h2 class="txHead">每日收益 <span class="cap" id="dDailyCount"></span><select id="dDailyMonth" class="monthSel" aria-label="选择月份"></select></h2>
         <div class="tableWrap">
           <table>
             <thead>
@@ -360,7 +360,7 @@ g.pt .dot { transition: r .12s; }
         </div>
       </section>
       <section class="panel">
-        <h2>该基金记录 <span class="cap" id="dCount"></span></h2>
+        <h2 class="txHead">该基金记录 <span class="cap" id="dCount"></span><select id="dMonth" class="monthSel" aria-label="选择月份"></select></h2>
         <div class="tableWrap">
           <table>
             <thead>
@@ -1185,6 +1185,7 @@ function renderDetail(name) {
   const a = aggregate(DATA, NAVS, DIVIDENDS, PAYMENTS);
   const f = a.fundList.find((x) => x.name === name);
   if (!f) return;
+  curDetail = f;
 
   const overlay = $("#viewDetail");
   $("#viewCategory").hidden = true; // 替换式导航：从分类页进入时先收起分类页
@@ -1292,24 +1293,72 @@ function renderDetail(name) {
     });
     renderReturnChart(dReturnMode || "pnl");
 
-    const db = $("#dDailyBody");
-    db.innerHTML = "";
-    [...rs].reverse().forEach((p) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML =
-        `<td class="date">${p.date}</td>` +
-        `<td class="num dim">${fmtNav(p.nav)}</td>` +
-        `<td class="num dim">${fmtShares(p.shares)}</td>` +
-        `<td class="num ${p.dailyPnl > 0 ? "gain" : p.dailyPnl < 0 ? "loss" : "dim"}">${fmtSigned(p.dailyPnl)}</td>` +
-        `<td class="num ${p.cumPnl >= 0 ? "gain" : "loss"}">${fmtSigned(p.cumPnl)}</td>`;
-      db.appendChild(tr);
-    });
-    $("#dDailyCount").textContent = `共 ${rs.length} 个净值日`;
+    renderDailyTable(rs);
   }
 
+  renderFundTxTable(f);
+}
+
+// 填充月份下拉框，返回当前应显示的月份（无数据返回 null）
+function fillMonthSel(sel, items, cur, getDate) {
+  const months = [...new Set(items.map((it) => String(getDate(it)).slice(0, 7)))].sort().reverse();
+  if (!months.length) {
+    sel.hidden = true;
+    sel.innerHTML = "";
+    return null;
+  }
+  sel.hidden = false;
+  const chosen = months.includes(cur) ? cur : months[0];
+  sel.innerHTML = months
+    .map((m) => `<option value="${m}">${m.slice(0, 4)}年${Number(m.slice(5))}月</option>`)
+    .join("");
+  sel.value = chosen;
+  return chosen;
+}
+
+// 详情页 - 每日收益表（按月分页）
+let dDailyMonthSel = null;
+function renderDailyTable(rs) {
+  const sel = $("#dDailyMonth");
+  const db = $("#dDailyBody");
+  const cnt = $("#dDailyCount");
+  dDailyMonthSel = fillMonthSel(sel, rs, dDailyMonthSel, (p) => p.date);
+  if (dDailyMonthSel === null) {
+    db.innerHTML = "";
+    cnt.textContent = "共 0 个净值日";
+    return;
+  }
+  const rows = rs.filter((p) => String(p.date).slice(0, 7) === dDailyMonthSel).reverse();
+  db.innerHTML = "";
+  rows.forEach((p) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td class="date">${p.date}</td>` +
+      `<td class="num dim">${fmtNav(p.nav)}</td>` +
+      `<td class="num dim">${fmtShares(p.shares)}</td>` +
+      `<td class="num ${p.dailyPnl > 0 ? "gain" : p.dailyPnl < 0 ? "loss" : "dim"}">${fmtSigned(p.dailyPnl)}</td>` +
+      `<td class="num ${p.cumPnl >= 0 ? "gain" : "loss"}">${fmtSigned(p.cumPnl)}</td>`;
+    db.appendChild(tr);
+  });
+  cnt.textContent = `本月 ${rows.length} 个 · 共 ${rs.length} 个净值日`;
+}
+
+// 详情页 - 该基金记录表（按月分页）
+let dMonthSel = null;
+let curDetail = null;
+function renderFundTxTable(f) {
+  const sel = $("#dMonth");
   const body = $("#dBody");
+  const cnt = $("#dCount");
+  dMonthSel = fillMonthSel(sel, f.rows, dMonthSel, (r) => r.date);
+  if (dMonthSel === null) {
+    body.innerHTML = "";
+    cnt.textContent = `共 ${f.count} 条`;
+    return;
+  }
+  const rows = f.rows.filter((r) => String(r.date).slice(0, 7) === dMonthSel).reverse();
   body.innerHTML = "";
-  [...f.rows].reverse().forEach((r) => {
+  rows.forEach((r) => {
     const tr = document.createElement("tr");
     const navCell = r.nav !== null || r.shares !== null
       ? `${r.nav !== null ? fmtNav(r.nav) : "—"} / ${r.shares !== null ? fmtShares(r.shares) : "—"}`
@@ -1323,7 +1372,7 @@ function renderDetail(name) {
       `<td class="${r.check && !r.check.ok ? "loss" : "dim"}" style="white-space:normal;">${r.check ? r.check.detail : "—"}</td>`;
     body.appendChild(tr);
   });
-  $("#dCount").textContent = `共 ${f.count} 条`;
+  cnt.textContent = `本月 ${rows.length} 条 · 共 ${f.count} 条`;
 }
 
 function renderAll() {
@@ -1368,6 +1417,14 @@ document.addEventListener("click", (e) => {
 $("#txMonth").addEventListener("change", (e) => {
   txMonthSel = e.target.value;
   renderTxTable();
+});
+$("#dDailyMonth").addEventListener("change", (e) => {
+  dDailyMonthSel = e.target.value;
+  if (curDetail && curDetail.returnSeries) renderDailyTable(curDetail.returnSeries);
+});
+$("#dMonth").addEventListener("change", (e) => {
+  dMonthSel = e.target.value;
+  if (curDetail) renderFundTxTable(curDetail);
 });
 $("#btnBack").addEventListener("click", () => {
   $("#viewDetail").hidden = true;
