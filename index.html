@@ -147,6 +147,12 @@ body {
 .legend .dot { width: 10px; height: 10px; border-radius: 999px; }
 
 /* ---------- 表格 ---------- */
+.txHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.monthSel {
+  margin-left: auto; font: inherit; font-size: 12.5px;
+  padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+}
 .tableWrap { overflow-x: auto; margin-top: 12px; }
 table { width: 100%; border-collapse: collapse; min-width: 560px; }
 th {
@@ -217,6 +223,14 @@ td.date { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px;
 }
 .detailOverlay[hidden] { display: none !important; }
 body.locked { overflow: hidden; }
+/* 返回按钮悬浮固定：详情页再长也能直接点，无需滚回顶部 */
+#viewDetail #btnBack {
+  position: fixed; right: 18px; bottom: 18px; z-index: 70;
+  background: var(--panel); border-color: var(--border);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
+  padding: 9px 16px;
+}
+#viewDetail .app { padding-bottom: 84px; }
 .detailHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .detailHead h2 { margin: 0; }
 .empty {
@@ -288,7 +302,7 @@ g.pt .dot { transition: r .12s; }
     </section>
 
     <section class="panel">
-      <h2>交易记录 <span class="cap" id="txCount"></span></h2>
+      <h2 class="txHead">交易记录 <span class="cap" id="txCount"></span><select id="txMonth" class="monthSel" aria-label="选择月份"></select></h2>
       <div class="tableWrap">
         <table>
           <thead>
@@ -306,7 +320,7 @@ g.pt .dot { transition: r .12s; }
   <!-- ===== 单只基金详情（覆盖层，不打断总览的滚动位置） ===== -->
   <main id="viewDetail" class="detailOverlay" hidden>
     <div class="app">
-      <div><button id="btnBack" class="btn ghost">← 返回总览</button></div>
+      <button id="btnBack" class="btn ghost">← 返回总览</button>
       <section class="panel">
         <div class="detailHead">
           <h2 id="dName"></h2>
@@ -1114,9 +1128,35 @@ function renderDashboard() {
     .sort((x, y) => y.value - x.value);
   renderDonut(entries);
 
+  renderTxTable();
+
+  const grid = $("#fundGrid");
+  grid.innerHTML = "";
+  a.fundList.forEach((f) => grid.appendChild(fundCardEl(f)));
+}
+
+// 交易记录按月分页：默认最新月，下拉切换；避免数据变多后页面无限变长
+let txMonthSel = null;
+function renderTxTable() {
   const body = $("#txBody");
+  const sel = $("#txMonth");
+  const months = [...new Set(DATA.map((r) => String(r.date).slice(0, 7)))].sort().reverse();
+  if (!months.length) {
+    body.innerHTML = "";
+    sel.hidden = true;
+    $("#txCount").textContent = "共 0 条";
+    return;
+  }
+  sel.hidden = false;
+  if (!months.includes(txMonthSel)) txMonthSel = months[0];
+  sel.innerHTML = months
+    .map((m) => `<option value="${m}">${m.slice(0, 4)}年${Number(m.slice(5))}月</option>`)
+    .join("");
+  sel.value = txMonthSel;
+
+  const rows = DATA.filter((r) => String(r.date).slice(0, 7) === txMonthSel).reverse();
   body.innerHTML = "";
-  [...DATA].reverse().forEach((r) => {
+  rows.forEach((r) => {
     const tr = document.createElement("tr");
     tr.innerHTML =
       `<td class="date">${esc(r.date)}</td>` +
@@ -1126,11 +1166,7 @@ function renderDashboard() {
       `<td class="num">${r.amount ? fmtMoney(r.amount) : "—"}</td>`;
     body.appendChild(tr);
   });
-  $("#txCount").textContent = `共 ${DATA.length} 条`;
-
-  const grid = $("#fundGrid");
-  grid.innerHTML = "";
-  a.fundList.forEach((f) => grid.appendChild(fundCardEl(f)));
+  $("#txCount").textContent = `本月 ${rows.length} 条 · 全部 ${DATA.length} 条`;
 }
 
 function fundCardEl(f) {
@@ -1328,6 +1364,10 @@ function openCategory(type) {
 document.addEventListener("click", (e) => {
   const link = e.target.closest("[data-fund]");
   if (link) renderDetail(link.dataset.fund);
+});
+$("#txMonth").addEventListener("change", (e) => {
+  txMonthSel = e.target.value;
+  renderTxTable();
 });
 $("#btnBack").addEventListener("click", () => {
   $("#viewDetail").hidden = true;
