@@ -294,7 +294,7 @@ g.pt .dot { transition: r .12s; }
           <thead>
             <tr>
               <th>日期</th><th>基金</th><th>类型</th><th>操作</th>
-              <th class="num">金额</th><th class="num">收益</th>
+              <th class="num">金额</th>
             </tr>
           </thead>
           <tbody id="txBody"></tbody>
@@ -321,6 +321,30 @@ g.pt .dot { transition: r .12s; }
           <div class="chartMsg" id="fundMsg" hidden></div>
         </div>
       </section>
+      <section class="panel" id="dReturnPanel">
+        <div class="detailHead" style="justify-content:space-between;">
+          <h2 id="dReturnTitle">收益走势 <span class="cap">按净值与交易记录计算</span></h2>
+          <div id="dReturnToggle" class="chartRanges" style="position:static;"></div>
+        </div>
+        <div class="chartBox" style="height:240px;">
+          <div class="svgChart" id="fundReturnChart"></div>
+          <div class="chartMsg" id="fundReturnMsg" hidden></div>
+        </div>
+      </section>
+      <section class="panel" id="dDailyPanel">
+        <h2>每日收益 <span class="cap" id="dDailyCount"></span></h2>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>日期</th><th class="num">单位净值</th><th class="num">持有份额</th>
+                <th class="num">当日收益</th><th class="num">累计收益</th>
+              </tr>
+            </thead>
+            <tbody id="dDailyBody"></tbody>
+          </table>
+        </div>
+      </section>
       <section class="panel">
         <h2>该基金记录 <span class="cap" id="dCount"></span></h2>
         <div class="tableWrap">
@@ -328,7 +352,7 @@ g.pt .dot { transition: r .12s; }
             <thead>
               <tr>
                 <th>日期</th><th>类型</th><th>操作</th>
-                <th class="num">金额</th><th class="num">收益</th><th class="num">净值 / 份额</th>
+                <th class="num">金额</th><th class="num">净值 / 份额</th><th>核对</th>
               </tr>
             </thead>
             <tbody id="dBody"></tbody>
@@ -600,6 +624,104 @@ function buildTimeline(records, navs, dividends, cashRecords) {
   return out;
 }
 
+/* ================= 对账：交易记录 vs 净值表 ================= */
+// 把净值列表转成 Map<日期, Map<基金名, 净值>>
+function buildNavByDate(navList) {
+  const m = new Map();
+  for (const n of navList || []) {
+    if (!m.has(n.date)) m.set(n.date, new Map());
+    m.get(n.date).set(n.name, n.nav);
+  }
+  return m;
+}
+
+// 核对单条交易：
+//   1) 记录净值 vs 净值表（先取申请日 date 的净值；不匹配或当日无净值时，
+//      自动尝试该基金下一净值日——QDII 等 T+1 成交场景，匹配则标注"按次日"）
+//   2) 金额 vs 份额 × 净值 − 手续费（买入/卖出均适用）
+function reconcileTrade(r, navByDate, navByFund) {
+  const out = { navOk: true, navExpected: null, amountOk: true, amountDiff: 0, ok: true, detail: "" };
+  if (!r || r.action === "收益") { out.detail = "—"; return out; }
+  if (r.nav !== null) {
+    const d = r.date; // 成交净值 = 申请日净值，先用 date 核对
+    const dayMap = navByDate.get(d);
+    // 该基金 date 之后的第一个净值日
+    const nextRec = (navByFund && navByFund.get(r.name) || []).find((n) => n.date > d);
+    const nextNav = nextRec ? nextRec.nav : null;
+    const nextDate = nextRec ? nextRec.date : null;
+    const NAV_TOL = 5e-4; // 净值容差：净值精确到4位小数，容忍末位舍入及浮点误差
+    if (dayMap && dayMap.has(r.name)) {
+      out.navExpected = dayMap.get(r.name);
+      if (Math.abs(r.nav - out.navExpected) > NAV_TOL) {
+        // 当日不匹配，尝试下一净值日
+        if (nextNav !== null && Math.abs(r.nav - nextNav) <= NAV_TOL) {
+          out.navExpected = nextNav;
+          out.navNextDate = nextDate;
+        } else {
+          out.navOk = false; out.ok = false;
+        }
+      }
+    } else if (nextNav !== null) {
+      // 当日无净值（节假日/周末申请），与下一净值日比对
+      out.navExpected = nextNav;
+      out.navNextDate = nextDate;
+      if (Math.abs(r.nav - nextNav) > NAV_TOL) { out.navOk = false; out.ok = false; }
+    }
+  }
+  if (r.shares !== null && r.nav !== null) {
+    const expected = r.shares * r.nav - (r.fee || 0);
+    out.amountDiff = r.amount - expected;
+    if (Math.abs(out.amountDiff) > 0.5) { out.amountOk = false; out.ok = false; }
+  }
+  const parts = [];
+  if (r.nav !== null) {
+    const nextTag = out.navNextDate ? `（按次日 ${out.navNextDate.slice(5).replace("-", "/")}）` : "";
+    if (out.navExpected === null) parts.push("净值表无当日");
+    else if (out.navOk) parts.push(`净值 ✓${nextTag}`);
+    else parts.push(`净值 ✗ 记录${fmtNav(r.nav)} vs 表${fmtNav(out.navExpected)}${nextTag}`);
+  }
+  if (r.shares !== null && r.nav !== null) {
+    if (out.amountOk) parts.push("金额 ✓");
+    else parts.push(`金额 ✗ 差${fmtSigned(out.amountDiff)}`);
+  }
+  out.detail = parts.join(" / ") || "—";
+  return out;
+}
+
+/* ================= 单只基金收益序列（按净值+交易计算） ================= */
+// 返回 [{ date, nav, shares, dailyPnl, cumPnl, invested, value, rate }]
+// 累计收益 = 当日市值 + 已卖出回款 − 累计投入 + 累计分红
+function buildFundReturnSeries(trades, divs, navByDate) {
+  if (!trades.length) return [];
+  const name = trades[0].name;
+  const dates = new Set();
+  trades.forEach((r) => dates.add(r.date));
+  const divByDate = new Map();
+  (divs || []).forEach((d) => { dates.add(d.date); divByDate.set(d.date, (divByDate.get(d.date) || 0) + d.amount); });
+  navByDate.forEach((dayMap, d) => { if (dayMap.has(name)) dates.add(d); });
+  const sorted = [...dates].sort();
+
+  let shares = 0, invested = 0, sold = 0, dividends = 0;
+  const out = [];
+  for (const d of sorted) {
+    for (const r of trades) {
+      if (r.date !== d) continue;
+      if (r.action === "买入") { invested += r.amount; if (r.shares !== null) shares += r.shares; }
+      else if (r.action === "卖出") { sold += r.amount; if (r.shares !== null) shares -= r.shares; }
+    }
+    dividends += divByDate.get(d) || 0;
+    const dayMap = navByDate.get(d);
+    const nav = dayMap && dayMap.has(name) ? dayMap.get(name) : null;
+    if (nav !== null) {
+      const value = Math.max(0, shares) * nav;
+      const prev = out.length ? out[out.length - 1].cumPnl : 0;
+      const cumPnl = value + sold - invested + dividends;
+      out.push({ date: d, nav, shares: Math.max(0, shares), dailyPnl: cumPnl - prev, cumPnl, invested, value, rate: invested > 0 ? cumPnl / invested : 0 });
+    }
+  }
+  return out;
+}
+
 function aggregate(tradingRecords, navs, dividends, payments) {
   const navList = navs || [];
   const divList = dividends || [];
@@ -611,6 +733,7 @@ function aggregate(tradingRecords, navs, dividends, payments) {
     navByFund.get(n.name).push(n);
   }
   navByFund.forEach((arr) => arr.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)));
+  const navByDate = buildNavByDate(navList);
 
   // 分红按基金归集
   const divByFund = new Map();
@@ -704,6 +827,9 @@ function aggregate(tradingRecords, navs, dividends, payments) {
     invested += f.invested;
     sold += f.sold;
     profit += f.profit;
+    // 收益序列（按净值+交易计算）+ 每条交易的对账结果
+    f.returnSeries = buildFundReturnSeries(f.rows, divList.filter((d) => d.name === f.name), navByDate);
+    for (const r of f.rows) r.check = reconcileTrade(r, navByDate, navByFund);
     fundList.push(f);
     byType.set(f.type, (byType.get(f.type) || 0) + Math.max(0, f.holding));
   });
@@ -749,6 +875,7 @@ function fmtAxis(v) {
 const CHART_RANGES = [["1M", 31], ["3M", 93], ["6M", 186], ["1Y", 372], ["全部", null]];
 const chartRangeSel = {};   // mountId → 当前选中区间
 const chartLastArgs = {};   // mountId → 上次渲染参数（切换区间时重绘用）
+let dReturnMode = "pnl";    // 详情页收益走势切换：pnl(金额) / rate(收益率)
 
 function renderLineChart(mountId, msgId, dates, values, colorHex, opts) {
   opts = opts || {};
@@ -996,8 +1123,7 @@ function renderDashboard() {
       `<td><button class="fundLink" data-fund="${esc(r.name)}">${esc(r.name)}</button></td>` +
       `<td>${esc(r.type)}</td>` +
       `<td>${actionTag(r.action)}</td>` +
-      `<td class="num">${r.amount ? fmtMoney(r.amount) : "—"}</td>` +
-      `<td class="num ${r.profit > 0 ? "gain" : r.profit < 0 ? "loss" : "dim"}">${r.profit ? fmtSigned(r.profit) : "—"}</td>`;
+      `<td class="num">${r.amount ? fmtMoney(r.amount) : "—"}</td>`;
     body.appendChild(tr);
   });
   $("#txCount").textContent = `共 ${DATA.length} 条`;
@@ -1082,6 +1208,69 @@ function renderDetail(name) {
     }
   }
 
+  // ===== 收益走势图（金额 / 收益率 切换）+ 每日收益表 =====
+  const retPanel = $("#dReturnPanel");
+  const dailyPanel = $("#dDailyPanel");
+  if (f.isCash || !f.returnSeries || !f.returnSeries.length) {
+    retPanel.hidden = true;
+    dailyPanel.hidden = true;
+  } else {
+    retPanel.hidden = false;
+    dailyPanel.hidden = false;
+    const rs = f.returnSeries;
+    const renderReturnChart = (mode) => {
+      const isPnl = mode !== "rate";
+      $("#dReturnTitle").innerHTML = isPnl
+        ? '累计收益走势 <span class="cap">按净值与交易记录计算，单位：元</span>'
+        : '累计收益率走势 <span class="cap">累计收益 / 累计投入</span>';
+      renderLineChart(
+        "fundReturnChart", "fundReturnMsg",
+        rs.map((p) => p.date),
+        rs.map((p) => isPnl ? p.cumPnl : p.rate * 100),
+        isPnl ? "#0F9D63" : "#5B9BD5",
+        {
+          tipWord: isPnl ? "累计收益" : "收益率",
+          fmtV: isPnl ? fmtSigned : (v) => fmtPct(v / 100),
+          axisFmt: isPnl ? fmtAxis : (v) => Number(v).toFixed(1) + "%",
+          zeroBase: true,
+          emptyText: "暂无收益数据"
+        }
+      );
+    };
+    const toggle = $("#dReturnToggle");
+    toggle.innerHTML = "";
+    const modeBtns = {};
+    ["pnl", "rate"].forEach((m) => {
+      const b = document.createElement("button");
+      b.className = "rangeBtn" + ((dReturnMode || "pnl") === m ? " on" : "");
+      b.textContent = m === "pnl" ? "收益金额" : "收益率";
+      b.addEventListener("click", () => {
+        dReturnMode = m;
+        Object.entries(modeBtns).forEach(([k, btn]) => {
+          btn.className = "rangeBtn" + (k === m ? " on" : "");
+        });
+        renderReturnChart(m);
+      });
+      modeBtns[m] = b;
+      toggle.appendChild(b);
+    });
+    renderReturnChart(dReturnMode || "pnl");
+
+    const db = $("#dDailyBody");
+    db.innerHTML = "";
+    [...rs].reverse().forEach((p) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td class="date">${p.date}</td>` +
+        `<td class="num dim">${fmtNav(p.nav)}</td>` +
+        `<td class="num dim">${fmtShares(p.shares)}</td>` +
+        `<td class="num ${p.dailyPnl > 0 ? "gain" : p.dailyPnl < 0 ? "loss" : "dim"}">${fmtSigned(p.dailyPnl)}</td>` +
+        `<td class="num ${p.cumPnl >= 0 ? "gain" : "loss"}">${fmtSigned(p.cumPnl)}</td>`;
+      db.appendChild(tr);
+    });
+    $("#dDailyCount").textContent = `共 ${rs.length} 个净值日`;
+  }
+
   const body = $("#dBody");
   body.innerHTML = "";
   [...f.rows].reverse().forEach((r) => {
@@ -1094,8 +1283,8 @@ function renderDetail(name) {
       `<td>${esc(r.type)}</td>` +
       `<td>${actionTag(r.action)}</td>` +
       `<td class="num">${r.amount ? fmtMoney(r.amount) : "—"}</td>` +
-      `<td class="num ${r.profit > 0 ? "gain" : r.profit < 0 ? "loss" : "dim"}">${r.profit ? fmtSigned(r.profit) : "—"}</td>` +
-      `<td class="num dim">${navCell}</td>`;
+      `<td class="num dim">${navCell}</td>` +
+      `<td class="${r.check && !r.check.ok ? "loss" : "dim"}" style="white-space:normal;">${r.check ? r.check.detail : "—"}</td>`;
     body.appendChild(tr);
   });
   $("#dCount").textContent = `共 ${f.count} 条`;
